@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Web Chat</title>
+    <script src="http://code.jquery.com/jquery-1.10.2.js"></script>
+    <!-- socket.io cdn -->
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script> -->
+    <!-- https://www.npmjs.com/package/socket.io-client -->
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@2/dist/socket.io.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.2/axios.min.js"></script>
+
+    <script>
+      const token =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjEsImVtYWlsIjoidGVzdEB0ZXN0LnRlIiwiZGlzcGxheU5hbWUiOiLthYzsiqTthLAiLCJnZW5kZXIiOiJNIiwiZW1haWxWZXJpZmljYXRpb24iOjAsInByb2ZpbGVJbWFnZVBhdGgiOiIiLCJjb21wbGV0ZWRPcmRlcnMiOjAsInByb2Nlc3NlZE9yZGVycyI6MCwicG9zc2libGVEaXN0YW5jZSI6bnVsbCwiY29udGFjdFRpbWUiOm51bGwsInJhdGUiOm51bGwsImdyYWRlIjpudWxsLCJwYXltZW50cyI6bnVsbCwicm9sZSI6Ik5PUk1BTCIsInByb3ZpZGVyIjoibG9jYWwiLCJjcmVhdGVkQXQiOiIyMDIwLTA2LTExVDEzOjE3OjQzLjAwMFoiLCJ1cGRhdGVkQXQiOiIyMDIwLTA2LTExVDEzOjE3OjQzLjAwMFoiLCJpYXQiOjE1OTE4ODE0NzcsImV4cCI6MTU5MjE0MDY3N30.lIb_yrGkC760bDbr5eUulxKBanR90kje36dyqIVvU9g';
+      let roomKey = '1-2-3';
+      // const baseURL = 'http://localhost:52273';
+      const baseURL = 'http://13.125.78.90:52273';
+      axios.defaults.baseURL = baseURL + '/api';
+
+      $(document).ready(function () {
+        // socket.io cdn
+        // const socket = io.connect(baseURL);
+
+        // npm socket.io-client
+        const socket = io(baseURL);
+        $('#inpUserIds').val('1, 2, 3');
+
+        // Join to lobby at first time.
+        socket.emit('join', roomKey);
+        loadMessage().then();
+
+        // Join to room as wish.
+        $('#btnRoomEnter').click(async function () {
+          const userIds = $('#inpUserIds').val().split(/,\s?/);
+
+          const chattingRoom = await axios({
+            method: 'post',
+            url: '/chatting/joinRoom',
+            headers: {
+              authorization: token,
+            },
+            data: {
+              userIds,
+            },
+          }).then(({ data }) => data.data.chattingRoom);
+
+          roomKey = chattingRoom.roomKey;
+          socket.emit('join', roomKey);
+
+          // load Message
+          await loadMessage();
+        });
+
+        // Join to room as wish.
+        $('#btnRoomLeave').click(function () {
+          roomKey = '';
+          $('#inpUserIds').val(roomKey);
+          socket.emit('leave');
+        });
+
+        // Recieve message and append to content.
+        socket.on('message', function (result) {
+          console.log('result', result);
+          appendMessage(result);
+        });
+
+        // user id 는 토큰에서 꺼내씁니다.
+        // Send message
+        $('#btnUserMsg').click(function () {
+          if (roomKey !== '') {
+            if ($('#inpUserMessage').val() !== '') {
+              axios({
+                method: 'post',
+                url: '/chatting/sendMessage',
+                headers: {
+                  authorization: token,
+                },
+                data: {
+                  roomKey,
+                  message: $('#inpUserMessage').val(),
+                },
+              }).then(({ data }) => {
+                // console.log(data.data.chattingMessage);
+              });
+            }
+            $('#inpUserMessage').val('');
+          } else {
+            alert('please click enter');
+          }
+        });
+
+        // Disconnect
+        $('#btnSocketDisconnect').click(function () {
+          // console.log('disconnect');
+          socket.disconnect();
+        });
+      });
+
+      const loadMessage = async () => {
+        const chattingMessage = await axios({
+          method: 'get',
+          url: '/chatting/loadMessage',
+          headers: {
+            authorization: token,
+          },
+          params: {
+            roomKey,
+            limit: 10, // default 30
+            offset: 0, // default 0
+          },
+        }).then(({ data }) => data.data.chattingMessage);
+
+        $('#content').empty();
+
+        chattingMessage.map(v => {
+          prependMessage(v);
+        });
+      };
+      const appendMessage = result => {
+        const output =
+          '<p>[' +
+          result.createdAt +
+          '] <strong>' +
+          result.userId +
+          '</strong>: ' +
+          result.message +
+          '</p>';
+        $(output).appendTo('#content');
+      };
+
+      const prependMessage = result => {
+        const output =
+          '<p>[' +
+          result.createdAt +
+          '] <strong>' +
+          result.userId +
+          '</strong>: ' +
+          result.message +
+          '</p>';
+        $(output).prependTo('#content');
+      };
+    </script>
+  </head>
+  <body>
+    <h1>Socket.io Chat</h1>
+    <input id="inpUserIds" placeholder="userIds (Array!)" />
+    <button id="btnRoomEnter">Enter</button>
+    <button id="btnRoomLeave">Leave</button>
+    <button id="btnSocketDisconnect">Disconnect Socket</button>
+    <hr />
+    <input id="inpUserMessage" placeholder="user message" />
+    <button id="btnUserMsg">Send</button>
+    <ul id="content"></ul>
+  </body>
+</html>
